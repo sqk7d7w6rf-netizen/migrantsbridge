@@ -53,7 +53,21 @@ async def get_me(
     session: AsyncSession = Depends(get_async_session),
 ):
     """Get the current authenticated user's profile."""
-    return await auth_service.get_user_by_id(session, current_user.id)
+    user = await auth_service.get_user_by_id(session, current_user.id)
+    role_name = user.role.name if user.role else None
+    return UserRead(
+        id=user.id,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        phone=user.phone,
+        role_id=user.role_id,
+        role_name=role_name,
+        is_active=user.is_active,
+        last_login=user.last_login_at,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
 
 
 @router.put("/me", response_model=UserRead)

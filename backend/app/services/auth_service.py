@@ -183,8 +183,13 @@ async def change_password(
 
 async def get_user_by_id(session: AsyncSession, user_id: UUID) -> User:
     """Fetch a user by ID. Raises 404 if not found."""
+    from sqlalchemy.orm import selectinload
+    from app.models.user import Role
+
     result = await session.execute(
-        select(User).where(User.id == user_id, User.is_deleted == False)
+        select(User)
+        .options(selectinload(User.role).selectinload(Role.permissions))
+        .where(User.id == user_id, User.is_deleted == False)
     )
     user = result.scalar_one_or_none()
     if user is None:

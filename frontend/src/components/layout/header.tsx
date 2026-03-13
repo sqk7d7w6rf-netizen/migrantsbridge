@@ -11,13 +11,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { SearchInput } from "@/components/shared/search-input";
+import { useAuthStore } from "@/stores/use-auth-store";
 import Link from "next/link";
 
 export function Header() {
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    window.location.href = "/login";
-  };
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  const initials = user
+    ? `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
+    : "?";
+  const displayName = user
+    ? `${user.first_name} ${user.last_name}`
+    : "Loading...";
+  const displayEmail = user?.email ?? "";
 
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-card px-6">
@@ -40,17 +47,15 @@ export function Header() {
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-8 w-8 rounded-full">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs">AD</AvatarFallback>
+              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="end" forceMount>
           <div className="flex items-center gap-2 p-2">
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium">Admin User</p>
-              <p className="text-xs text-muted-foreground">
-                admin@migrantsbridge.org
-              </p>
+              <p className="text-sm font-medium">{displayName}</p>
+              <p className="text-xs text-muted-foreground">{displayEmail}</p>
             </div>
           </div>
           <DropdownMenuSeparator />
@@ -69,7 +74,7 @@ export function Header() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="cursor-pointer text-destructive"
-            onClick={handleLogout}
+            onClick={logout}
           >
             <LogOut className="mr-2 h-4 w-4" />
             Logout

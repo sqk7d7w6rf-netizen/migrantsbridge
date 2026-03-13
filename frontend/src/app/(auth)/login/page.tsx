@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import apiClient from "@/lib/api-client";
+import { useAuthStore } from "@/stores/use-auth-store";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
+  const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,11 +28,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await apiClient.post("/auth/login", {
-        email,
-        password,
-      });
-      localStorage.setItem("access_token", data.access_token);
+      await login(email, password);
       router.push("/");
     } catch {
       toast.error("Invalid email or password");
