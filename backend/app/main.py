@@ -9,6 +9,7 @@ from app.config import settings
 from app.core.database import engine
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
 from app.core.redis import close_redis, redis_client
+from app.api.router import api_router
 from app.exceptions import AppException, app_exception_handler, generic_exception_handler
 
 logging.basicConfig(
@@ -57,6 +58,9 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)
+
+    # API routes
+    app.include_router(api_router)
 
     # Health check
     @app.get("/health", tags=["health"])
