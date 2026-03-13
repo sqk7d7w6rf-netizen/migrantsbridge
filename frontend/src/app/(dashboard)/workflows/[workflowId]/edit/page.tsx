@@ -98,6 +98,7 @@ export default function WorkflowEditPage() {
       description,
       trigger_type: triggerType,
       trigger_config: triggerConfig,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       steps: steps.map(({ id, workflow_id, ...rest }) => rest),
     });
     router.push(`/workflows/${workflowId}`);

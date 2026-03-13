@@ -38,15 +38,21 @@ export function WorkflowToolbar({
     <div className="flex items-center justify-between border-b bg-card px-4 py-3">
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {isEditing ? (
-          <div className="flex items-center gap-2 flex-1 max-w-md">
+          <div className="flex items-center gap-2 flex-1 max-w-lg">
             <Input
               value={workflowName}
               onChange={(e) => onNameChange(e.target.value)}
               className="h-8 text-sm font-semibold"
               placeholder="Workflow name"
-              onBlur={() => setIsEditing(false)}
               onKeyDown={(e) => e.key === "Enter" && setIsEditing(false)}
               autoFocus
+            />
+            <Input
+              value={workflowDescription}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              className="h-8 text-sm"
+              placeholder="Description"
+              onBlur={() => setIsEditing(false)}
             />
           </div>
         ) : (

@@ -20,7 +20,6 @@ import {
   Clock,
   FileText,
   GitBranch,
-  Plus,
 } from "lucide-react";
 
 interface WorkflowSidebarProps {

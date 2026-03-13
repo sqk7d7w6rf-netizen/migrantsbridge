@@ -7,7 +7,7 @@ import { useTask, useUpdateTask, useAddTaskComment } from "@/hooks/queries/use-t
 import { PageHeader } from "@/components/layout/page-header";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { TASK_STATUSES, PRIORITIES } from "@/lib/constants";
+import { TASK_STATUSES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";

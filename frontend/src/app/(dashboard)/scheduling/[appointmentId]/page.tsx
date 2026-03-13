@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useAppointment, useUpdateAppointment, useDeleteAppointment } from "@/hooks/queries/use-appointments";
+import { useParams } from "next/navigation";
+import { useAppointment, useUpdateAppointment } from "@/hooks/queries/use-appointments";
 import { PageHeader } from "@/components/layout/page-header";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -30,12 +30,10 @@ import Link from "next/link";
 
 export default function AppointmentDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const appointmentId = params.appointmentId as string;
 
   const { data: appointment, isLoading } = useAppointment(appointmentId);
   const updateAppointment = useUpdateAppointment(appointmentId);
-  const deleteAppointment = useDeleteAppointment();
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [notes, setNotes] = useState("");

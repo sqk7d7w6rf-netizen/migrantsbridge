@@ -15,7 +15,6 @@ import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SearchInput } from "@/components/shared/search-input";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { MessageSquare, Settings, FileText } from "lucide-react";
 import { Thread, MessageChannel } from "@/types/communication";
 import Link from "next/link";

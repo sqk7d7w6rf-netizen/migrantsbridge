@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { InvoicePreview } from "@/components/features/billing/invoice-preview";
 import { PaymentForm } from "@/components/features/billing/payment-form";
@@ -19,7 +19,6 @@ import Link from "next/link";
 
 export default function InvoiceDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const invoiceId = params.invoiceId as string;
 
   const { data: invoice, isLoading } = useInvoice(invoiceId);

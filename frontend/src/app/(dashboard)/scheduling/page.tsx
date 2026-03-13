@@ -25,7 +25,7 @@ export default function SchedulingPage() {
     end_date: format(endOfMonth(now), "yyyy-MM-dd"),
   });
 
-  const appointments = data?.items ?? [];
+  const appointments = useMemo(() => data?.items ?? [], [data]);
 
   const todaysAppointments = useMemo(
     () =>

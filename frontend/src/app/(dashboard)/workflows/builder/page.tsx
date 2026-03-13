@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCreateWorkflow, useGenerateWorkflow } from "@/hooks/queries/use-workflows";
 import { WorkflowToolbar } from "@/components/features/workflows/workflow-toolbar";
@@ -17,6 +17,14 @@ function generateId() {
 }
 
 export default function WorkflowBuilderPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-[80vh]">Loading...</div>}>
+      <WorkflowBuilderContent />
+    </Suspense>
+  );
+}
+
+function WorkflowBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const showAi = searchParams.get("ai") === "true";
@@ -27,7 +35,7 @@ export default function WorkflowBuilderPage() {
   const [name, setName] = useState("Untitled Workflow");
   const [description, setDescription] = useState("");
   const [triggerType, setTriggerType] = useState<Workflow["trigger_type"]>("manual");
-  const [triggerConfig, setTriggerConfig] = useState<Record<string, unknown>>({});
+  const [triggerConfig] = useState<Record<string, unknown>>({});
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [aiPanelOpen, setAiPanelOpen] = useState(showAi);
@@ -82,6 +90,7 @@ export default function WorkflowBuilderPage() {
       trigger_type: triggerType,
       trigger_config: triggerConfig,
       is_active: false,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       steps: steps.map(({ id, workflow_id, ...rest }) => rest),
     });
     router.push("/workflows");

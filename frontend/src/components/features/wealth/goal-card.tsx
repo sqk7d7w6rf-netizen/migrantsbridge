@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { FinancialGoal } from "@/types/goal";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Target } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 const categoryLabels: Record<FinancialGoal["category"], string> = {
   emergency_fund: "Emergency Fund",

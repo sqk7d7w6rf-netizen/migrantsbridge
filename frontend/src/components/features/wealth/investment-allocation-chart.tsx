@@ -87,9 +87,9 @@ export function InvestmentAllocationChart({
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number, name: string) => [
-                  formatCurrency(value),
-                  name,
+                formatter={(value, name) => [
+                  formatCurrency(Number(value)),
+                  String(name),
                 ]}
                 contentStyle={{
                   borderRadius: "8px",

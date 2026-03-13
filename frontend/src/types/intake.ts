@@ -13,7 +13,7 @@ export interface IntakeCaseDetails {
   service_type: string;
   immigration_status: string;
   description: string;
-  urgency: "low" | "medium" | "high" | "urgent";
+  urgency: "" | "low" | "medium" | "high" | "urgent";
 }
 
 export interface IntakeDocument {

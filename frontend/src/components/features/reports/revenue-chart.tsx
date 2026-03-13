@@ -83,11 +83,11 @@ export function RevenueChart({ dateRange, onExport }: RevenueChartProps) {
                 border: "1px solid hsl(var(--border))",
                 borderRadius: "8px",
               }}
-              formatter={(value: number) =>
+              formatter={(value) =>
                 new Intl.NumberFormat("en-US", {
                   style: "currency",
                   currency: "USD",
-                }).format(value)
+                }).format(Number(value))
               }
             />
             <Legend />

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useWorkflows } from "@/hooks/queries/use-workflows";
 import { PageHeader } from "@/components/layout/page-header";
@@ -8,11 +7,8 @@ import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Workflow } from "@/types/workflow";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 import {
   Plus,
   Sparkles,
@@ -20,8 +16,6 @@ import {
   Zap,
   Clock,
   MousePointerClick,
-  Play,
-  ChevronRight,
 } from "lucide-react";
 
 const triggerIcons: Record<string, typeof Zap> = {

@@ -55,11 +55,6 @@ export default function AvailabilityPage() {
 
   const getSlotKey = (day: number, time: string) => `${day}-${time}`;
 
-  const toggleSlot = (day: number, time: string) => {
-    const key = getSlotKey(day, time);
-    setSlots((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const handleMouseDown = (day: number, time: string) => {
     const key = getSlotKey(day, time);
     const newValue = !slots[key];

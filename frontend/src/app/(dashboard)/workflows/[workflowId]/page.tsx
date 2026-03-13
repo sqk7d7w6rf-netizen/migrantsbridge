@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useWorkflow, useExecuteWorkflow, useWorkflowExecutions } from "@/hooks/queries/use-workflows";
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,7 +11,7 @@ import { WorkflowCanvas } from "@/components/features/workflows/workflow-canvas"
 import { WorkflowMonitor } from "@/components/features/workflows/workflow-monitor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkflowExecution } from "@/types/workflow";
 import { format } from "date-fns";
@@ -45,7 +45,7 @@ const triggerIcons: Record<string, typeof Zap> = {
 
 export default function WorkflowDetailPage() {
   const params = useParams();
-  const router = useRouter();
+
   const workflowId = params.workflowId as string;
 
   const { data: workflow, isLoading } = useWorkflow(workflowId);

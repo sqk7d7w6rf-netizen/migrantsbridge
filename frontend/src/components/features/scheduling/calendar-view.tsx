@@ -9,7 +9,6 @@ import {
   endOfWeek,
   addDays,
   isSameMonth,
-  isSameDay,
   isToday,
   addMonths,
   subMonths,

@@ -53,12 +53,13 @@ import { MessageTemplate, MessageTemplateCreate, MessageChannel } from "@/types/
 
 export default function TemplatesPage() {
   const [search, setSearch] = useState("");
-  const { data, isLoading } = useTemplates({ search });
-  const createTemplate = useCreateTemplate();
-  const deleteTemplate = useDeleteTemplate();
-
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
+
+  const { data, isLoading } = useTemplates({ search });
+  const createTemplate = useCreateTemplate();
+  const updateTemplate = useUpdateTemplate(editingTemplate?.id ?? "");
+  const deleteTemplate = useDeleteTemplate();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState("");
 
@@ -100,8 +101,9 @@ export default function TemplatesPage() {
     };
 
     if (editingTemplate) {
-      const updateMutation = useUpdateTemplateAction(editingTemplate.id);
-      updateMutation(payload);
+      updateTemplate.mutate(payload, {
+        onSuccess: () => setDialogOpen(false),
+      });
     } else {
       createTemplate.mutate(payload, {
         onSuccess: () => setDialogOpen(false),
@@ -354,11 +356,4 @@ export default function TemplatesPage() {
       />
     </div>
   );
-}
-
-function useUpdateTemplateAction(id: string) {
-  const mutation = useUpdateTemplate(id);
-  return (payload: MessageTemplateCreate) => {
-    mutation.mutate(payload);
-  };
 }

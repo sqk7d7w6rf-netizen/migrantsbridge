@@ -80,21 +80,3 @@ export function useCaseStatusDistribution() {
     queryFn: () => reportsService.getCaseStatusDistribution(),
   });
 }
-
-export function useReports(reportType: string, params?: DateRange) {
-  return useQuery({
-    queryKey: [...queryKeys.reports.all, reportType, params],
-    queryFn: () => {
-      switch (reportType) {
-        case "clients":
-          return reportsService.getClientGrowth(params);
-        case "financial":
-          return reportsService.getRevenueTrend(params);
-        case "cases":
-          return reportsService.getCaseOutcomes(params);
-        default:
-          return reportsService.getDashboardData(params);
-      }
-    },
-  });
-}

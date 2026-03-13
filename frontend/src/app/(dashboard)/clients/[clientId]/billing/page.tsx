@@ -13,7 +13,6 @@ import { INVOICE_STATUSES } from "@/lib/constants";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SearchInput } from "@/components/shared/search-input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,

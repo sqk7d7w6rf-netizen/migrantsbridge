@@ -128,7 +128,7 @@ export function TaskForm({ task, onSuccess }: TaskFormProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -143,7 +143,7 @@ export function TaskForm({ task, onSuccess }: TaskFormProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
-              <Select value={priority} onValueChange={setPriority}>
+              <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

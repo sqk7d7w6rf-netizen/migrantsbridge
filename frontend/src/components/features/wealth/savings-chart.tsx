@@ -67,7 +67,7 @@ export function SavingsChart({
                 tickFormatter={(value) => formatCurrency(value)}
               />
               <Tooltip
-                formatter={(value: number) => [formatCurrency(value), "Balance"]}
+                formatter={(value) => [formatCurrency(Number(value)), "Balance"]}
                 labelFormatter={(label) => label}
                 contentStyle={{
                   borderRadius: "8px",
