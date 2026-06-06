@@ -17,6 +17,8 @@ pip-delete-this-directory.txt
 develop-eggs/
 lib/
 lib64/
+# Re-include frontend src/lib (the lib/ rule above is Python-only)
+!frontend/src/lib/
 parts/
 sdist/
 var/
