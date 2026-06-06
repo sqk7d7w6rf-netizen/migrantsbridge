@@ -10,6 +10,7 @@ from app.api.v1 import (
     communication,
     documents,
     intake,
+    integrations,
     reporting,
     scheduling,
     tasks,
@@ -31,3 +32,4 @@ api_router.include_router(tasks.router, prefix="/tasks", tags=["Tasks"])
 api_router.include_router(wealth.router, prefix="/wealth", tags=["Wealth Building"])
 api_router.include_router(workflows.router, prefix="/workflows", tags=["Workflows"])
 api_router.include_router(reporting.router, prefix="/reporting", tags=["Reporting"])
+api_router.include_router(integrations.router, prefix="/integrations", tags=["Integrations"])
