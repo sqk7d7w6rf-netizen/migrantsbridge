@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +8,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "MigrantsBridge"
     DEBUG: bool = False
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/migrantsbridge"
     REDIS_URL: str = "redis://localhost:6379/0"
     SECRET_KEY: str = "change-me-in-production"
