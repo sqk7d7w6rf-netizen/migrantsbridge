@@ -50,4 +50,25 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.reminder_tasks.send_appointment_reminders",
         "schedule": 600,  # every 10 minutes
     },
+
+    # ── Talart Thai Vegetable Business agents (Asia/Bangkok = UTC+7) ──────────
+
+    # Morning Buy Advisor — 5:30am Bangkok daily (22:30 UTC previous day)
+    "vegbiz-morning-buy-advisor": {
+        "task": "app.workers.vegetable_biz_tasks.morning_buy_advisor",
+        "schedule": _crontab(hour=22, minute=30),
+        "args": ({}, {}, []),  # data loaded from Google Sheets at runtime
+    },
+    # 3pm Waste Reducer — 3pm Bangkok daily (8:00 UTC)
+    "vegbiz-afternoon-waste-reducer": {
+        "task": "app.workers.vegetable_biz_tasks.afternoon_waste_reducer",
+        "schedule": _crontab(hour=8, minute=0),
+        "args": ({}, {}),
+    },
+    # Weekly Commission Report — Sunday 8pm Bangkok (13:00 UTC Sunday)
+    "vegbiz-weekly-commission": {
+        "task": "app.workers.vegetable_biz_tasks.weekly_commission_report",
+        "schedule": _crontab(hour=13, minute=0, day_of_week=0),  # 0=Sunday
+        "args": ([],),  # sales_data loaded from Google Sheets at runtime
+    },
 }
