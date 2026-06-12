@@ -128,7 +128,49 @@ async def list_payments(
 
 # --- Summary ---
 
-@router.get("/summary", response_model=BillingSummary)
+@router.put("/invoices/{invoice_id}", response_model=InvoiceRead, include_in_schema=False)
+@router.patch("/invoices/{invoice_id}", response_model=InvoiceRead)
+async def patch_invoice(
+    invoice_id: UUID,
+    payload: InvoiceUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Update an invoice (PATCH or PUT)."""
+    return await billing_service.update_invoice(session, invoice_id, payload)
+
+
+@router.post("/invoices/{invoice_id}/send", response_model=InvoiceRead)
+async def send_invoice(
+    invoice_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Mark an invoice as sent."""
+    return await billing_service.send_invoice(session, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/cancel", response_model=InvoiceRead)
+async def cancel_invoice(
+    invoice_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Cancel an invoice."""
+    return await billing_service.cancel_invoice(session, invoice_id)
+
+
+@router.get("/invoices/{invoice_id}/payments", response_model=list[PaymentRead])
+async def get_invoice_payments(
+    invoice_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get all payments for an invoice."""
+    return await billing_service.get_invoice_payments(session, invoice_id)
+
+
+@router.get("/billing/summary", response_model=BillingSummary)
 async def get_billing_summary(
     period_start: date | None = None,
     period_end: date | None = None,

@@ -249,3 +249,223 @@ async def get_wealth_dashboard(
 ):
     """Get aggregated wealth dashboard for a client."""
     return await wealth_service.get_wealth_dashboard(session, client_id)
+
+
+@router.get("/dashboard", response_model=WealthDashboard)
+async def get_wealth_dashboard_current(
+    client_id: UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get wealth dashboard (client_id optional query param)."""
+    if client_id:
+        return await wealth_service.get_wealth_dashboard(session, client_id)
+    # Return an empty dashboard when no client is specified
+    return WealthDashboard(
+        client_id=None,
+        total_savings=0,
+        total_investments=0,
+        net_worth=0,
+        active_goals_count=0,
+        savings_rate=None,
+        total_assets=0,
+        total_debt=0,
+        monthly_income=None,
+        monthly_expenses=None,
+        savings_programs=[],
+        recent_transactions=[],
+        goals_summary=[],
+        investment_summary=[],
+    )
+
+
+# --- Goals (frontend-compatible paths) ---
+
+@router.get("/goals", response_model=PaginatedResponse[GoalRead])
+async def list_goals_query(
+    pagination: PaginationParams = Depends(),
+    client_id: UUID | None = None,
+    status: str | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """List all financial goals (client_id optional query param)."""
+    if client_id:
+        return await wealth_service.list_goals(session, client_id, pagination)
+    from app.core.pagination import paginate
+    from app.models.wealth import FinancialGoal
+    from sqlalchemy import select
+    query = select(FinancialGoal)
+    if status:
+        if status == "achieved":
+            query = query.where(FinancialGoal.is_achieved == True)
+        elif status == "active":
+            query = query.where(FinancialGoal.is_achieved == False)
+    query = query.order_by(FinancialGoal.created_at.desc())
+    result = await paginate(session, query, pagination)
+    result.items = [wealth_service._to_goal_read(g) for g in result.items]
+    return result
+
+
+@router.get("/goals/{goal_id}", response_model=GoalRead)
+async def get_single_goal(
+    goal_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get a specific financial goal by ID."""
+    return await wealth_service.get_goal(session, goal_id)
+
+
+@router.patch("/goals/{goal_id}", response_model=GoalRead)
+async def patch_goal(
+    goal_id: UUID,
+    payload: GoalUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Update a financial goal."""
+    return await wealth_service.update_goal(session, goal_id, payload)
+
+
+@router.delete("/goals/{goal_id}", status_code=204)
+async def delete_goal(
+    goal_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Delete a financial goal."""
+    from fastapi import HTTPException
+    from sqlalchemy import select
+    from app.models.wealth import FinancialGoal
+    result = await session.execute(select(FinancialGoal).where(FinancialGoal.id == goal_id))
+    goal = result.scalar_one_or_none()
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    await session.delete(goal)
+
+
+@router.get("/goals/{goal_id}/milestones")
+async def get_goal_milestones(
+    goal_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get milestones for a financial goal (stub — returns empty list)."""
+    return []
+
+
+@router.get("/goals/{goal_id}/transactions")
+async def get_goal_transactions(
+    goal_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get transactions linked to a financial goal."""
+    from sqlalchemy import select
+    from app.models.wealth import SavingsEnrollment, SavingsTransaction
+    enrollments = (await session.execute(
+        select(SavingsEnrollment.id).where(SavingsEnrollment.goal_id == goal_id)
+    )).scalars().all()
+    if not enrollments:
+        return []
+    txs = (await session.execute(
+        select(SavingsTransaction)
+        .where(SavingsTransaction.enrollment_id.in_(enrollments))
+        .order_by(SavingsTransaction.transaction_date.desc())
+    )).scalars().all()
+    return [wealth_service._to_transaction_read(t) for t in txs]
+
+
+# --- Savings (frontend-compatible paths) ---
+
+@router.get("/savings", response_model=PaginatedResponse[SavingsProgramRead])
+async def list_savings_query(
+    pagination: PaginationParams = Depends(),
+    client_id: UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """List savings programs."""
+    return await wealth_service.list_savings_programs(session, pagination)
+
+
+@router.post("/savings", response_model=EnrollmentRead, status_code=201)
+async def create_savings_query(
+    payload: EnrollmentCreate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Enroll a client in a savings program."""
+    return await wealth_service.create_enrollment(session, payload)
+
+
+@router.patch("/savings/{savings_id}", response_model=EnrollmentRead)
+async def patch_savings(
+    savings_id: UUID,
+    payload: dict,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Update a savings enrollment (stub)."""
+    from fastapi import HTTPException
+    from sqlalchemy import select
+    from app.models.wealth import SavingsEnrollment
+    result = await session.execute(select(SavingsEnrollment).where(SavingsEnrollment.id == savings_id))
+    enrollment = result.scalar_one_or_none()
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="Savings enrollment not found")
+    return wealth_service._to_enrollment_read(enrollment)
+
+
+# --- Investments (frontend-compatible paths) ---
+
+@router.get("/investments", response_model=PaginatedResponse[InvestmentRead])
+async def list_investments_query(
+    pagination: PaginationParams = Depends(),
+    client_id: UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """List investments (client_id optional query param)."""
+    if client_id:
+        return await wealth_service.list_investments(session, client_id, pagination)
+    from app.core.pagination import paginate
+    from app.models.wealth import InvestmentRecord
+    from sqlalchemy import select
+    query = select(InvestmentRecord).order_by(InvestmentRecord.created_at.desc())
+    result = await paginate(session, query, pagination)
+    result.items = [wealth_service._to_investment_read(r) for r in result.items]
+    return result
+
+
+# --- Assets (frontend-compatible paths) ---
+
+@router.get("/assets", response_model=PaginatedResponse[AssetRead])
+async def list_assets_query(
+    pagination: PaginationParams = Depends(),
+    client_id: UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """List assets (client_id optional query param)."""
+    if client_id:
+        return await wealth_service.list_assets(session, client_id, pagination)
+    from app.core.pagination import paginate
+    from app.models.wealth import AssetRecord
+    from sqlalchemy import select
+    query = select(AssetRecord).order_by(AssetRecord.created_at.desc())
+    result = await paginate(session, query, pagination)
+    result.items = [wealth_service._to_asset_read(r) for r in result.items]
+    return result
+
+
+@router.patch("/assets/{asset_id}", response_model=AssetRead)
+async def patch_asset(
+    asset_id: UUID,
+    payload: AssetUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Update an asset."""
+    return await wealth_service.update_asset(session, asset_id, payload)

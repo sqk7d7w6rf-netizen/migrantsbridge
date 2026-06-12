@@ -355,6 +355,59 @@ async def list_payments(
     return result
 
 
+async def send_invoice(session: AsyncSession, invoice_id: UUID) -> InvoiceRead:
+    """Mark an invoice as sent to the client."""
+    invoice = await _get_invoice_or_404(session, invoice_id)
+    if invoice.status not in (ModelInvoiceStatus.DRAFT,):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only draft invoices can be sent (current status: {invoice.status.value})",
+        )
+    invoice.status = ModelInvoiceStatus.SENT
+    session.add(invoice)
+    await session.flush()
+    return await _build_invoice_read(session, invoice)
+
+
+async def cancel_invoice(session: AsyncSession, invoice_id: UUID) -> InvoiceRead:
+    """Cancel an invoice."""
+    invoice = await _get_invoice_or_404(session, invoice_id)
+    if invoice.status in (ModelInvoiceStatus.PAID, ModelInvoiceStatus.CANCELLED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot cancel a {invoice.status.value} invoice",
+        )
+    invoice.status = ModelInvoiceStatus.CANCELLED
+    session.add(invoice)
+    await session.flush()
+    return await _build_invoice_read(session, invoice)
+
+
+async def get_invoice_payments(session: AsyncSession, invoice_id: UUID) -> list[PaymentRead]:
+    """Get all payments for a specific invoice."""
+    await _get_invoice_or_404(session, invoice_id)
+    result = await session.execute(
+        select(Payment)
+        .where(Payment.invoice_id == invoice_id)
+        .order_by(Payment.payment_date.desc())
+    )
+    payments = result.scalars().all()
+    return [
+        PaymentRead(
+            id=p.id,
+            invoice_id=p.invoice_id,
+            amount=p.amount,
+            payment_method=p.payment_method.value,
+            reference_number=p.external_transaction_id,
+            notes=p.notes,
+            payment_date=p.payment_date.date() if p.payment_date else date.today(),
+            recorded_by=p.processed_by_id,
+            created_at=p.created_at,
+        )
+        for p in payments
+    ]
+
+
 # --- Summary ---
 
 async def compute_billing_summary(
