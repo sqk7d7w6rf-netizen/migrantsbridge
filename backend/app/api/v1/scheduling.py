@@ -140,6 +140,91 @@ async def get_calendar(
 
 # --- Reminders ---
 
+@router.patch("/appointments/{appointment_id}", response_model=AppointmentRead)
+async def patch_appointment(
+    appointment_id: UUID,
+    payload: AppointmentUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Update an appointment (PATCH)."""
+    return await scheduling_service.update_appointment(session, appointment_id, payload)
+
+
+@router.delete("/appointments/{appointment_id}", response_model=SuccessResponse)
+async def delete_appointment(
+    appointment_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Delete an appointment."""
+    await scheduling_service.cancel_appointment(session, appointment_id, "Deleted")
+    return SuccessResponse(message="Appointment cancelled and removed")
+
+
+@router.get("/appointments/calendar")
+async def get_appointments_calendar(
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(..., ge=2000, le=2100),
+    staff_id: UUID | None = None,
+    client_id: UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get appointments for a calendar month view."""
+    import calendar as cal
+    start_date = date(year, month, 1)
+    last_day = cal.monthrange(year, month)[1]
+    end_date = date(year, month, last_day)
+    appointments = await scheduling_service.get_calendar_view(
+        session, start_date, end_date, staff_id, client_id
+    )
+    return {"appointments": appointments, "month": month, "year": year}
+
+
+@router.get("/appointments/available-slots")
+async def get_available_slots_query(
+    date: date = Query(...),
+    staff_id: UUID | None = None,
+    duration_minutes: int = Query(default=60),
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get available time slots for a given date and optional staff."""
+    if staff_id:
+        return await scheduling_service.compute_available_slots(
+            session, staff_id, date, duration_minutes
+        )
+    return []
+
+
+@router.get("/appointments/availability")
+async def get_availability_query(
+    user_id: UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get availability slots for a staff member (user_id as query param)."""
+    target_id = user_id or current_user.id
+    return await scheduling_service.list_availability(session, target_id, None)
+
+
+@router.put("/appointments/availability")
+async def update_availability_slots(
+    payload: dict,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Update availability slots for the current user."""
+    slots = payload.get("slots", [])
+    results = []
+    for slot_data in slots:
+        slot_payload = AvailabilitySlotCreate(**slot_data)
+        result = await scheduling_service.create_availability_slot(session, slot_payload)
+        results.append(result)
+    return results
+
+
 @router.post("/reminders", status_code=201)
 async def create_reminder(
     payload: ReminderCreate,

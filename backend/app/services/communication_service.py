@@ -1,4 +1,4 @@
-"""Communication service: templates, rendering, and notification queuing."""
+"""Communication service: templates, rendering, notification queuing, and threads."""
 
 from __future__ import annotations
 
@@ -8,22 +8,41 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from jinja2 import BaseLoader, Environment, TemplateSyntaxError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.constants import ChannelType, NotificationStatus as ModelNotificationStatus
 from app.core.pagination import PaginatedResponse, PaginationParams, paginate
-from app.models.communication import MessageLog, MessageTemplate, Notification
+from app.models.communication import (
+    Message,
+    MessageLog,
+    MessageTemplate,
+    Notification,
+    NotificationPreference,
+    SenderType,
+    Thread,
+    ThreadStatus,
+)
 from app.models.user import User
 from app.schemas.communication import (
     BulkNotificationSend,
+    MessageCreate,
+    MessageRead,
     NotificationChannel,
+    NotificationPreferenceRead,
+    NotificationPreferenceUpdate,
     NotificationRead,
     NotificationSend,
     NotificationStatus,
+    SenderTypeEnum,
     TemplateCreate,
     TemplateRead,
     TemplateUpdate,
+    ThreadCreate,
+    ThreadRead,
+    ThreadStatusEnum,
+    ThreadWithMessages,
 )
 
 
@@ -351,3 +370,188 @@ async def mark_as_read(session: AsyncSession, notification_id: UUID) -> Notifica
     session.add(notif)
     await session.flush()
     return _to_notification_read(notif)
+
+
+# --------------------------------------------------------------------------- #
+# Threads & Messages                                                           #
+# --------------------------------------------------------------------------- #
+
+_CHANNEL_STR = {ChannelType.EMAIL: "email", ChannelType.SMS: "sms", ChannelType.IN_APP: "in_app"}
+_STR_CHANNEL = {v: k for k, v in _CHANNEL_STR.items()}
+
+
+def _to_message_read(msg: Message) -> MessageRead:
+    return MessageRead(
+        id=msg.id,
+        thread_id=msg.thread_id,
+        sender_id=msg.sender_id,
+        sender_name=msg.sender_name,
+        sender_type=SenderTypeEnum(msg.sender_type.value),
+        content=msg.content,
+        channel=_CHANNEL_STR.get(msg.channel, "in_app"),
+        is_read=msg.is_read,
+        metadata=msg.metadata_,
+        created_at=msg.created_at,
+        updated_at=msg.updated_at,
+    )
+
+
+def _to_thread_read(thread: Thread, last_message: Message | None = None) -> ThreadRead:
+    client = thread.client
+    client_name = f"{client.first_name} {client.last_name}".strip() if client else "Unknown"
+    return ThreadRead(
+        id=thread.id,
+        subject=thread.subject,
+        client_id=thread.client_id,
+        client_name=client_name,
+        participants=[str(p) for p in (thread.participants or [])],
+        status=ThreadStatusEnum(thread.status.value),
+        channel=_CHANNEL_STR.get(thread.channel, "in_app"),
+        unread_count=thread.unread_count,
+        last_message=_to_message_read(last_message) if last_message else None,
+        created_at=thread.created_at,
+        updated_at=thread.updated_at,
+    )
+
+
+async def list_threads(
+    session: AsyncSession,
+    pagination: PaginationParams,
+    status_filter: str | None = None,
+    channel: str | None = None,
+    client_id: UUID | None = None,
+) -> PaginatedResponse[ThreadRead]:
+    query = select(Thread)
+    if status_filter:
+        try:
+            query = query.where(Thread.status == ThreadStatus(status_filter))
+        except ValueError:
+            pass
+    if channel:
+        ch = _STR_CHANNEL.get(channel)
+        if ch:
+            query = query.where(Thread.channel == ch)
+    if client_id:
+        query = query.where(Thread.client_id == client_id)
+    query = query.order_by(Thread.updated_at.desc())
+    result = await paginate(session, query, pagination)
+
+    # Load last message for each thread
+    thread_ids = [t.id for t in result.items]
+    last_messages: dict[UUID, Message] = {}
+    if thread_ids:
+        msg_result = await session.execute(
+            select(Message)
+            .where(Message.thread_id.in_(thread_ids))
+            .order_by(Message.created_at.desc())
+        )
+        for msg in msg_result.scalars().all():
+            if msg.thread_id not in last_messages:
+                last_messages[msg.thread_id] = msg
+
+    result.items = [_to_thread_read(t, last_messages.get(t.id)) for t in result.items]
+    return result
+
+
+async def get_thread(session: AsyncSession, thread_id: UUID) -> ThreadWithMessages:
+    result = await session.execute(
+        select(Thread)
+        .where(Thread.id == thread_id)
+        .options(selectinload(Thread.messages))
+    )
+    thread = result.scalar_one_or_none()
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    messages = sorted(thread.messages, key=lambda m: m.created_at)
+    last_msg = messages[-1] if messages else None
+    base = _to_thread_read(thread, last_msg)
+    return ThreadWithMessages(**base.model_dump(), messages=[_to_message_read(m) for m in messages])
+
+
+async def get_thread_messages(session: AsyncSession, thread_id: UUID) -> list[MessageRead]:
+    # Verify thread exists
+    t_result = await session.execute(select(Thread.id).where(Thread.id == thread_id))
+    if t_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    msg_result = await session.execute(
+        select(Message).where(Message.thread_id == thread_id).order_by(Message.created_at.asc())
+    )
+    return [_to_message_read(m) for m in msg_result.scalars().all()]
+
+
+async def mark_thread_read(session: AsyncSession, thread_id: UUID, user_id: UUID) -> None:
+    # Verify thread exists
+    t_result = await session.execute(select(Thread).where(Thread.id == thread_id))
+    thread = t_result.scalar_one_or_none()
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    await session.execute(
+        update(Message)
+        .where(Message.thread_id == thread_id, Message.is_read == False)
+        .values(is_read=True)
+    )
+    thread.unread_count = 0
+    session.add(thread)
+    await session.flush()
+
+
+# --------------------------------------------------------------------------- #
+# Notification Preferences                                                     #
+# --------------------------------------------------------------------------- #
+
+_DEFAULT_EVENTS = [
+    ("case_created", "New Case Created"),
+    ("case_status_changed", "Case Status Changed"),
+    ("document_uploaded", "Document Uploaded"),
+    ("appointment_scheduled", "Appointment Scheduled"),
+    ("task_assigned", "Task Assigned to You"),
+    ("message_received", "New Message Received"),
+    ("payment_received", "Payment Received"),
+]
+
+
+async def get_notification_preferences(
+    session: AsyncSession, user_id: UUID
+) -> list[NotificationPreferenceRead]:
+    result = await session.execute(
+        select(NotificationPreference).where(NotificationPreference.user_id == user_id)
+    )
+    saved = {p.event_type: p for p in result.scalars().all()}
+
+    prefs = []
+    for event_type, event_label in _DEFAULT_EVENTS:
+        pref = saved.get(event_type)
+        prefs.append(
+            NotificationPreferenceRead(
+                event_type=event_type,
+                event_label=event_label,
+                email_enabled=pref.email_enabled if pref else True,
+                sms_enabled=pref.sms_enabled if pref else False,
+                in_app_enabled=pref.in_app_enabled if pref else True,
+            )
+        )
+    return prefs
+
+
+async def update_notification_preferences(
+    session: AsyncSession, user_id: UUID, updates: list[NotificationPreferenceUpdate]
+) -> list[NotificationPreferenceRead]:
+    result = await session.execute(
+        select(NotificationPreference).where(NotificationPreference.user_id == user_id)
+    )
+    saved = {p.event_type: p for p in result.scalars().all()}
+
+    for u in updates:
+        pref = saved.get(u.event_type)
+        if pref is None:
+            pref = NotificationPreference(user_id=user_id, event_type=u.event_type)
+            session.add(pref)
+        pref.email_enabled = u.email_enabled
+        pref.sms_enabled = u.sms_enabled
+        pref.in_app_enabled = u.in_app_enabled
+
+    await session.flush()
+    return await get_notification_preferences(session, user_id)

@@ -119,7 +119,10 @@ services:
     container_name: mb-frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Relative by default: API calls go through the frontend origin and are
+      # proxied to the backend via Next.js rewrites (works from any device).
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+      BACKEND_INTERNAL_URL: http://backend:8000
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-MigrantsBridge}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"

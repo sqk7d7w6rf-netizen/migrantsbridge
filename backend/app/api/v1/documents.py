@@ -22,7 +22,8 @@ from app.services import document_service
 router = APIRouter()
 
 
-@router.post("/upload", response_model=DocumentRead, status_code=201)
+@router.post("", response_model=DocumentRead, status_code=201)
+@router.post("/upload", response_model=DocumentRead, status_code=201, include_in_schema=False)
 async def upload_document(
     file: UploadFile = File(...),
     client_id: UUID = Form(...),

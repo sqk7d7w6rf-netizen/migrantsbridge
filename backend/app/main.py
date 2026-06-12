@@ -22,13 +22,20 @@ logger = logging.getLogger("migrantsbridge")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting %s", settings.APP_NAME)
-    # Verify database connectivity
-    async with engine.begin() as conn:
-        await conn.run_sync(lambda c: None)
-    logger.info("Database connection verified")
-    # Verify Redis connectivity
-    await redis_client.ping()
-    logger.info("Redis connection verified")
+    # Verify connectivity but do not crash on failure: requests that need the
+    # DB/Redis will error individually, while /health and reconnection
+    # (pool_pre_ping) keep working once the dependency comes back.
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(lambda c: None)
+        logger.info("Database connection verified")
+    except Exception:
+        logger.exception("Database unreachable at startup; continuing — will retry per-request")
+    try:
+        await redis_client.ping()
+        logger.info("Redis connection verified")
+    except Exception:
+        logger.exception("Redis unreachable at startup; continuing — will retry per-request")
     yield
     # Shutdown
     await close_redis()
@@ -51,7 +58,7 @@ def create_app() -> FastAPI:
     # Middleware (order matters: first added = outermost)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"] if settings.DEBUG else [],
+        allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

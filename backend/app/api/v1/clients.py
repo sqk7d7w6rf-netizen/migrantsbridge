@@ -57,6 +57,19 @@ async def list_clients(
     return await client_service.search_clients(session, filters, pagination)
 
 
+@router.get("/search", response_model=PaginatedResponse[ClientRead])
+async def search_clients(
+    pagination: PaginationParams = Depends(),
+    query: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Search clients by name, email, or phone."""
+    from app.schemas.client import ClientSearch
+    filters = ClientSearch(query=query)
+    return await client_service.search_clients(session, filters, pagination)
+
+
 @router.get("/{client_id}", response_model=ClientRead)
 async def get_client(
     client_id: UUID,

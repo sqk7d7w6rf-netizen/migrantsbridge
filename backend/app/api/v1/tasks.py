@@ -61,6 +61,15 @@ async def get_my_tasks(
     return await task_service.get_my_tasks(session, current_user.id, pagination)
 
 
+@router.get("/workload", response_model=WorkloadSummary)
+async def get_my_workload(
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get workload summary for the current user."""
+    return await task_service.compute_workload(session, current_user.id)
+
+
 @router.get("/workload/{user_id}", response_model=WorkloadSummary)
 async def get_workload(
     user_id: UUID,
