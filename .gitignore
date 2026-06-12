@@ -15,8 +15,9 @@ pip-log.txt
 pip-delete-this-directory.txt
 .Python
 develop-eggs/
-lib/
-lib64/
+# Anchored to repo root: a bare "lib/" would also ignore frontend/src/lib/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
