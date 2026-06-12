@@ -5,6 +5,91 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+# ---- Thread / Message schemas ----
+
+
+class ThreadStatusEnum(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    ARCHIVED = "archived"
+
+
+class SenderTypeEnum(str, Enum):
+    STAFF = "staff"
+    CLIENT = "client"
+    SYSTEM = "system"
+
+
+class MessageRead(BaseModel):
+    id: UUID
+    thread_id: UUID
+    sender_id: UUID | None = None
+    sender_name: str
+    sender_type: SenderTypeEnum
+    content: str
+    channel: str
+    is_read: bool
+    metadata: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ThreadRead(BaseModel):
+    id: UUID
+    subject: str
+    client_id: UUID
+    client_name: str
+    participants: list[str]
+    status: ThreadStatusEnum
+    channel: str
+    unread_count: int
+    last_message: MessageRead | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ThreadWithMessages(ThreadRead):
+    messages: list[MessageRead] = []
+
+
+class ThreadCreate(BaseModel):
+    subject: str = Field(min_length=1, max_length=500)
+    client_id: UUID
+    channel: str = "in_app"
+    participants: list[str] = Field(default_factory=list)
+
+
+class MessageCreate(BaseModel):
+    content: str = Field(min_length=1)
+    channel: str = "in_app"
+    sender_type: SenderTypeEnum = SenderTypeEnum.STAFF
+
+
+# ---- Notification Preference schemas ----
+
+
+class NotificationPreferenceRead(BaseModel):
+    event_type: str
+    event_label: str
+    email_enabled: bool
+    sms_enabled: bool
+    in_app_enabled: bool
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    event_type: str
+    email_enabled: bool
+    sms_enabled: bool
+    in_app_enabled: bool
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    preferences: list[NotificationPreferenceUpdate]
+
 
 class NotificationChannel(str, Enum):
     EMAIL = "email"

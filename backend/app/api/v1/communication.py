@@ -1,4 +1,4 @@
-"""Communication API routes: templates, notifications, inbox."""
+"""Communication API routes: templates, notifications, inbox, threads, and preferences."""
 
 from uuid import UUID
 
@@ -11,11 +11,16 @@ from app.core.security import get_current_user
 from app.schemas.common import SuccessResponse
 from app.schemas.communication import (
     BulkNotificationSend,
+    NotificationPreferenceRead,
+    NotificationPreferencesUpdate,
     NotificationRead,
     NotificationSend,
     TemplateCreate,
     TemplateRead,
     TemplateUpdate,
+    ThreadRead,
+    ThreadWithMessages,
+    MessageRead,
 )
 from app.services import communication_service
 
@@ -137,3 +142,74 @@ async def mark_as_read(
 ):
     """Mark a notification as read."""
     return await communication_service.mark_as_read(session, notification_id)
+
+
+# --- Threads ---
+
+@router.get("/threads", response_model=PaginatedResponse[ThreadRead])
+async def list_threads(
+    pagination: PaginationParams = Depends(),
+    status: str | None = None,
+    channel: str | None = None,
+    client_id: UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """List communication threads."""
+    return await communication_service.list_threads(
+        session, pagination, status_filter=status, channel=channel, client_id=client_id
+    )
+
+
+@router.get("/threads/{thread_id}", response_model=ThreadWithMessages)
+async def get_thread(
+    thread_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get a thread with its messages."""
+    return await communication_service.get_thread(session, thread_id)
+
+
+@router.get("/threads/{thread_id}/messages", response_model=list[MessageRead])
+async def get_thread_messages(
+    thread_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get all messages in a thread."""
+    return await communication_service.get_thread_messages(session, thread_id)
+
+
+@router.post("/threads/{thread_id}/read", response_model=SuccessResponse)
+async def mark_thread_read(
+    thread_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Mark all messages in a thread as read."""
+    await communication_service.mark_thread_read(session, thread_id, current_user.id)
+    return SuccessResponse(message="Thread marked as read")
+
+
+# --- Notification Preferences ---
+
+@router.get("/notification-preferences", response_model=list[NotificationPreferenceRead])
+async def get_notification_preferences(
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get notification preferences for the current user."""
+    return await communication_service.get_notification_preferences(session, current_user.id)
+
+
+@router.put("/notification-preferences", response_model=list[NotificationPreferenceRead])
+async def update_notification_preferences(
+    payload: NotificationPreferencesUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Update notification preferences for the current user."""
+    return await communication_service.update_notification_preferences(
+        session, current_user.id, payload.preferences
+    )
