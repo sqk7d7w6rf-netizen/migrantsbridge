@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     ANTHROPIC_API_KEY: str = ""
     CLAUDE_MODEL: str = "claude-sonnet-4-6"
+    CLAUDE_TIMEOUT_SECONDS: float = 60.0
+    CLAUDE_MAX_RETRIES: int = 3
+    CLAUDE_MAX_TOKENS: int = 4096
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: str = "./uploads"
     AWS_BUCKET_NAME: str = ""

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
+from app.core.rate_limit import login_rate_limiter
 from app.core.security import get_current_user
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -20,7 +21,11 @@ from app.services import auth_service
 router = APIRouter()
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(login_rate_limiter)],
+)
 async def login(
     payload: LoginRequest,
     session: AsyncSession = Depends(get_async_session),

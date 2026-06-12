@@ -9,6 +9,7 @@ from app.config import settings
 from app.core.database import engine
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
 from app.core.redis import close_redis, redis_client
+from app.core.security import validate_production_security
 from app.api.router import api_router
 from app.exceptions import AppException, app_exception_handler, generic_exception_handler
 
@@ -22,6 +23,8 @@ logger = logging.getLogger("migrantsbridge")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting %s", settings.APP_NAME)
+    # Refuse to start with an insecure secret outside DEBUG (raises in production).
+    validate_production_security()
     # Verify connectivity but do not crash on failure: requests that need the
     # DB/Redis will error individually, while /health and reconnection
     # (pool_pre_ping) keep working once the dependency comes back.

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -9,7 +10,30 @@ from jose import JWTError, jwt
 
 from app.config import settings
 
+logger = logging.getLogger("migrantsbridge")
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+# Sentinel value shipped in config defaults / .env.example. Running with this in
+# production would let anyone forge JWTs, so we refuse to start outside DEBUG.
+INSECURE_SECRET_KEY = "change-me-in-production"
+
+
+def validate_production_security() -> None:
+    """Fail fast if the app is configured insecurely for a non-debug deployment.
+
+    Called at application startup. In DEBUG mode we only warn, so local dev and
+    tests keep working with the placeholder secret.
+    """
+    if settings.SECRET_KEY == INSECURE_SECRET_KEY:
+        message = (
+            "SECRET_KEY is set to the insecure default. Set a strong, random "
+            "SECRET_KEY before running outside DEBUG mode."
+        )
+        if settings.DEBUG:
+            logger.warning("%s (allowed because DEBUG=True)", message)
+        else:
+            raise RuntimeError(message)
 
 
 def hash_password(password: str) -> str:
