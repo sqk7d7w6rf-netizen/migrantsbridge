@@ -20,6 +20,16 @@ class ClaudeClient:
         self._client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         self._model = settings.CLAUDE_MODEL
 
+    @staticmethod
+    def _ensure_configured() -> None:
+        key = settings.ANTHROPIC_API_KEY
+        if not key or key.startswith("sk-ant-xxx"):
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY is not configured. Set a real key in the "
+                "environment or .env file to enable AI features (workflow "
+                "generation, document classification, eligibility assessment)."
+            )
+
     async def generate(
         self,
         system_prompt: str,
@@ -28,6 +38,7 @@ class ClaudeClient:
         temperature: float = 0.3,
     ) -> str:
         """Send a message to Claude and return the text response."""
+        self._ensure_configured()
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=max_tokens,
