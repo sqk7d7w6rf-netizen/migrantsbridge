@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str = ""
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_WEBHOOK_SECRET: str = ""
+    ZAPIER_API_KEY: str = ""
+    ZAPIER_WEBHOOK_URL: str = ""
 
 
 settings = Settings()
