@@ -12,12 +12,22 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { navigation } from "@/config/navigation";
+import { usePermission } from "@/hooks/use-permission";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 export function MobileNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { can } = usePermission();
+
+  // Mirror the desktop sidebar: only show items the current role can access.
+  const visibleSections = navigation
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.permission || can(item.permission)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -36,7 +46,7 @@ export function MobileNav() {
           </SheetTitle>
         </SheetHeader>
         <nav className="py-4">
-          {navigation.map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.title} className="mb-4">
               <p className="mb-1 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {section.title}

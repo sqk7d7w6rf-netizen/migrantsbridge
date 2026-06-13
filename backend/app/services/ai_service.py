@@ -6,6 +6,8 @@ import json
 import logging
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.integrations.claude import claude_client
 from app.prompts.document_classification import (
     DOCUMENT_CLASSIFICATION_SYSTEM,
@@ -16,6 +18,12 @@ from app.prompts.task_routing import TASK_ROUTING_SYSTEM, TASK_ROUTING_USER
 from app.prompts.workflow_generation import (
     WORKFLOW_GENERATION_SYSTEM,
     WORKFLOW_GENERATION_USER,
+)
+from app.schemas.ai import (
+    DocumentClassificationAI,
+    EligibilityAssessmentAI,
+    TaskRoutingAI,
+    WorkflowAI,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,23 +52,23 @@ async def generate_workflow(description: str, context: dict[str, Any] | None = N
         temperature=0.3,
     )
 
-    # Validate required fields
-    required_fields = {"name", "steps"}
-    missing = required_fields - set(result.keys())
-    if missing:
-        raise ValueError(f"AI-generated workflow missing fields: {missing}")
+    # Validate structure (name + steps required). Raise loudly on bad output
+    # rather than silently shipping a broken workflow.
+    try:
+        workflow = WorkflowAI.model_validate(result)
+    except ValidationError as exc:
+        logger.error("AI-generated workflow failed validation: %s", exc)
+        raise ValueError(f"AI-generated workflow is invalid: {exc}") from exc
 
-    # Ensure steps have required fields
-    for i, step in enumerate(result.get("steps", [])):
-        if "name" not in step:
-            step["name"] = f"Step {i + 1}"
-        if "step_type" not in step:
-            step["step_type"] = "action"
-        if "order" not in step:
-            step["order"] = i
+    # Backfill step name/order from index when the model omitted them.
+    for i, step in enumerate(workflow.steps):
+        if not step.name:
+            step.name = f"Step {i + 1}"
+        if step.order is None:
+            step.order = i
 
-    logger.info("Generated workflow '%s' with %d steps", result.get("name"), len(result.get("steps", [])))
-    return result
+    logger.info("Generated workflow '%s' with %d steps", workflow.name, len(workflow.steps))
+    return workflow.model_dump()
 
 
 async def classify_document(ocr_text: str) -> dict[str, Any]:
@@ -93,19 +101,25 @@ async def classify_document(ocr_text: str) -> dict[str, Any]:
         temperature=0.1,
     )
 
-    # Ensure required fields
-    result.setdefault("category", "other")
-    result.setdefault("confidence", 0.0)
-    result.setdefault("reasoning", "")
-    result.setdefault("extracted_metadata", {})
-    result.setdefault("language_detected", "unknown")
+    # Validate the AI output. Classification runs in a background OCR pipeline,
+    # so on malformed output we log the error and fall back to a safe "other"
+    # result instead of crashing the task — but the failure is no longer silent.
+    try:
+        classification = DocumentClassificationAI.model_validate(result)
+    except ValidationError as exc:
+        logger.error(
+            "Document classification failed validation, using fallback: %s", exc
+        )
+        classification = DocumentClassificationAI(
+            reasoning="AI classification returned malformed output"
+        )
 
     logger.info(
         "Document classified as '%s' with confidence %.2f",
-        result["category"],
-        result["confidence"],
+        classification.category,
+        classification.confidence,
     )
-    return result
+    return classification.model_dump()
 
 
 async def assess_eligibility(intake_data: dict[str, Any]) -> dict[str, Any]:
@@ -128,20 +142,20 @@ async def assess_eligibility(intake_data: dict[str, Any]) -> dict[str, Any]:
         temperature=0.2,
     )
 
-    # Ensure required fields
-    result.setdefault("eligible_services", [])
-    result.setdefault("ineligible_services", [])
-    result.setdefault("recommendations", [])
-    result.setdefault("risk_factors", [])
-    result.setdefault("confidence_score", 0.0)
-    result.setdefault("reasoning", "")
+    # Eligibility drives client service decisions, so malformed output must not
+    # be masked into an empty/"ineligible" result — raise so the caller knows.
+    try:
+        assessment = EligibilityAssessmentAI.model_validate(result)
+    except ValidationError as exc:
+        logger.error("Eligibility assessment failed validation: %s", exc)
+        raise ValueError(f"AI eligibility assessment is invalid: {exc}") from exc
 
     logger.info(
         "Eligibility assessment: %d eligible services, confidence %.2f",
-        len(result["eligible_services"]),
-        result["confidence_score"],
+        len(assessment.eligible_services),
+        assessment.confidence_score,
     )
-    return result
+    return assessment.model_dump()
 
 
 async def suggest_routing(
@@ -172,15 +186,19 @@ async def suggest_routing(
         temperature=0.2,
     )
 
-    result.setdefault("recommended_staff_id", None)
-    result.setdefault("confidence", 0.0)
-    result.setdefault("reasoning", "")
-    result.setdefault("alternative_staff_ids", [])
-    result.setdefault("routing_factors", {})
+    # Routing is advisory; on malformed output log and return an empty (but
+    # validated) recommendation so the caller can fall back to manual routing.
+    try:
+        routing = TaskRoutingAI.model_validate(result)
+    except ValidationError as exc:
+        logger.error(
+            "Task routing failed validation, returning no recommendation: %s", exc
+        )
+        routing = TaskRoutingAI(reasoning="AI routing returned malformed output")
 
     logger.info(
         "Task routing: recommended %s with confidence %.2f",
-        result["recommended_staff_id"],
-        result["confidence"],
+        routing.recommended_staff_id,
+        routing.confidence,
     )
-    return result
+    return routing.model_dump()

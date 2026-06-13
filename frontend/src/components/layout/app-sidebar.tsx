@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { navigation } from "@/config/navigation";
 import { useSidebarStore } from "@/stores/use-sidebar-store";
+import { usePermission } from "@/hooks/use-permission";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -12,6 +13,17 @@ import { Separator } from "@/components/ui/separator";
 export function AppSidebar() {
   const pathname = usePathname();
   const { isCollapsed, toggle } = useSidebarStore();
+  const { can } = usePermission();
+
+  // Only show nav items the current role can access. Items without a
+  // `permission` (e.g. Dashboard) are always visible; sections with no
+  // visible items are dropped entirely.
+  const visibleSections = navigation
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.permission || can(item.permission)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <aside
@@ -37,7 +49,7 @@ export function AppSidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4">
-        {navigation.map((section, idx) => (
+        {visibleSections.map((section, idx) => (
           <div key={section.title} className="mb-2">
             {!isCollapsed && (
               <p className="mb-1 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

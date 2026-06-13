@@ -124,3 +124,34 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "reports:read",
   ],
 };
+
+/**
+ * The full set of permissions. `admin` is granted every permission, so its
+ * list is the canonical source of truth for "all permissions".
+ */
+export const ALL_PERMISSIONS: Permission[] = ROLE_PERMISSIONS.admin;
+
+/**
+ * Resolve the permissions for a role name as returned by the backend
+ * (`/auth/me` sends `role_name`, a plain string).
+ *
+ * - `admin` always receives every permission (guards against the admin list
+ *   drifting out of sync with new permissions).
+ * - Unknown / null roles receive no permissions (fail closed) — frontend
+ *   checks are a UX layer; the backend remains the real security boundary.
+ */
+export function getPermissionsForRole(
+  role: string | null | undefined
+): Permission[] {
+  if (!role) return [];
+  if (role === "admin") return ALL_PERMISSIONS;
+  return ROLE_PERMISSIONS[role as Role] ?? [];
+}
+
+/** Pure helper: does this role have the given permission? */
+export function roleHasPermission(
+  role: string | null | undefined,
+  permission: Permission
+): boolean {
+  return getPermissionsForRole(role).includes(permission);
+}
