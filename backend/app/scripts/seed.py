@@ -1,10 +1,25 @@
-"""Seed the database with an admin role and user."""
+"""Seed all roles, permissions, and the initial admin user.
+
+Permission naming convention: ``resource:action`` (colon separator, matching
+the frontend ``ROLE_PERMISSIONS`` map in ``src/config/roles.ts``).
+
+Actions used:
+  read   — view records
+  write  — create or update records
+  delete — remove records
+  manage — higher-level control (currently: team management)
+
+Resources match the frontend domain names (e.g. ``invoices`` not ``billing``,
+``appointments`` not ``scheduling``) so that the same strings can be passed to
+``require_permission()`` on backend routes without translation.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import sys
 from pathlib import Path
 
-# Ensure the backend package is importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from sqlalchemy import select
@@ -16,16 +31,112 @@ from app.models.user import Permission, Role, User
 ADMIN_EMAIL = "admin@migrantsbridge.org"
 ADMIN_PASSWORD = "Admin123!"  # Change in production
 
-RESOURCES = [
-    "clients", "cases", "documents", "billing", "scheduling",
-    "communications", "tasks", "workflows", "reports", "settings", "users",
+
+# All unique permissions that exist across any role.
+# Format: "resource:action"  (matches frontend ROLE_PERMISSIONS exactly)
+ALL_PERMISSIONS: list[tuple[str, str]] = [
+    ("clients", "read"),
+    ("clients", "write"),
+    ("clients", "delete"),
+    ("cases", "read"),
+    ("cases", "write"),
+    ("cases", "delete"),
+    ("documents", "read"),
+    ("documents", "write"),
+    ("documents", "delete"),
+    ("appointments", "read"),
+    ("appointments", "write"),
+    ("appointments", "delete"),
+    ("communications", "read"),
+    ("communications", "write"),
+    ("invoices", "read"),
+    ("invoices", "write"),
+    ("invoices", "delete"),
+    ("tasks", "read"),
+    ("tasks", "write"),
+    ("tasks", "delete"),
+    ("wealth", "read"),
+    ("wealth", "write"),
+    ("workflows", "read"),
+    ("workflows", "write"),
+    ("workflows", "delete"),
+    ("reports", "read"),
+    ("settings", "read"),
+    ("settings", "write"),
+    ("team", "manage"),
 ]
-ACTIONS = ["create", "read", "update", "delete"]
+
+# Role definitions mirror frontend src/config/roles.ts ROLE_PERMISSIONS.
+# Each value is a list of "resource:action" strings.
+ROLE_DEFINITIONS: dict[str, dict] = {
+    "admin": {
+        "description": "Full system access",
+        "permissions": [f"{r}:{a}" for r, a in ALL_PERMISSIONS],
+    },
+    "manager": {
+        "description": "Manage team, clients, and operations",
+        "permissions": [
+            "clients:read", "clients:write",
+            "cases:read", "cases:write",
+            "documents:read", "documents:write",
+            "appointments:read", "appointments:write",
+            "communications:read", "communications:write",
+            "invoices:read", "invoices:write",
+            "tasks:read", "tasks:write",
+            "wealth:read", "wealth:write",
+            "workflows:read", "workflows:write",
+            "reports:read",
+            "settings:read",
+            "team:manage",
+        ],
+    },
+    "caseworker": {
+        "description": "Handle cases and client interactions",
+        "permissions": [
+            "clients:read", "clients:write",
+            "cases:read", "cases:write",
+            "documents:read", "documents:write",
+            "appointments:read", "appointments:write",
+            "communications:read", "communications:write",
+            "tasks:read", "tasks:write",
+            "wealth:read",
+        ],
+    },
+    "intake_specialist": {
+        "description": "Process new client intakes",
+        "permissions": [
+            "clients:read", "clients:write",
+            "cases:read", "cases:write",
+            "documents:read", "documents:write",
+            "appointments:read", "appointments:write",
+        ],
+    },
+    "accountant": {
+        "description": "Manage billing and financial records",
+        "permissions": [
+            "clients:read",
+            "invoices:read", "invoices:write",
+            "wealth:read", "wealth:write",
+            "reports:read",
+        ],
+    },
+    "viewer": {
+        "description": "Read-only access",
+        "permissions": [
+            "clients:read",
+            "cases:read",
+            "documents:read",
+            "appointments:read",
+            "tasks:read",
+            "reports:read",
+        ],
+    },
+}
 
 
 async def seed() -> None:
     async with async_session_factory() as session:
-        # Check if admin already exists
+        # Idempotency guard: bail if the admin user already exists.
         existing = await session.execute(
             select(User).where(User.email == ADMIN_EMAIL)
         )
@@ -33,43 +144,39 @@ async def seed() -> None:
             print(f"Admin user {ADMIN_EMAIL} already exists, skipping seed.")
             return
 
-        # Create permissions
-        permissions: list[Permission] = []
-        for resource in RESOURCES:
-            for action in ACTIONS:
-                perm = Permission(resource=resource, action=action, name=f"{resource}.{action}")
-                session.add(perm)
-                permissions.append(perm)
+        # 1. Create all permissions.
+        perm_map: dict[str, Permission] = {}
+        for resource, action in ALL_PERMISSIONS:
+            name = f"{resource}:{action}"
+            perm = Permission(resource=resource, action=action, name=name)
+            session.add(perm)
+            perm_map[name] = perm
         await session.flush()
 
-        # Create admin role with all permissions
-        admin_role = Role(name="admin", description="Full system administrator")
-        admin_role.permissions = permissions
-        session.add(admin_role)
+        # 2. Create all roles and assign their permissions.
+        role_map: dict[str, Role] = {}
+        for role_name, role_def in ROLE_DEFINITIONS.items():
+            role = Role(name=role_name, description=role_def["description"])
+            role.permissions = [perm_map[p] for p in role_def["permissions"]]
+            session.add(role)
+            role_map[role_name] = role
         await session.flush()
 
-        # Create staff role with read + limited write
-        staff_role = Role(name="staff", description="Staff member")
-        staff_perms = [p for p in permissions if p.action in ("create", "read", "update")]
-        staff_role.permissions = staff_perms
-        session.add(staff_role)
-        await session.flush()
-
-        # Create admin user
+        # 3. Create the initial admin user.
         admin = User(
             email=ADMIN_EMAIL,
             hashed_password=hash_password(ADMIN_PASSWORD),
             first_name="Admin",
             last_name="User",
-            role_id=admin_role.id,
+            role_id=role_map["admin"].id,
             is_active=True,
         )
         session.add(admin)
         await session.commit()
 
         print(f"Seeded admin user: {ADMIN_EMAIL} / {ADMIN_PASSWORD}")
-        print(f"Created roles: admin, staff")
-        print(f"Created {len(permissions)} permissions")
+        print(f"Created {len(ROLE_DEFINITIONS)} roles: {', '.join(ROLE_DEFINITIONS)}")
+        print(f"Created {len(perm_map)} permissions")
 
 
 if __name__ == "__main__":
