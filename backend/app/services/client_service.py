@@ -211,7 +211,12 @@ async def search_clients(
 
     query = query.order_by(Client.created_at.desc())
 
-    return await paginate(session, query, pagination, ClientRead)
+    # ClientRead carries computed fields (e.g. client_number) that don't exist on
+    # the ORM model, so it can't be validated directly from a Client row. Paginate
+    # the raw rows, then map each through _to_client_read.
+    page = await paginate(session, query, pagination)
+    page.items = [_to_client_read(client) for client in page.items]
+    return page
 
 
 async def get_client_cases(
