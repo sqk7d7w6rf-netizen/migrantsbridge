@@ -1,8 +1,19 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Search for .env in backend/ first, then project root — supports both local
+# dev (cd backend && uvicorn ...) and Docker (env injected via env_file at root).
+_HERE = Path(__file__).parent.parent  # backend/
+_ROOT = _HERE.parent                  # project root
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=[str(_HERE / ".env"), str(_ROOT / ".env")],
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     APP_NAME: str = "MigrantsBridge"
     DEBUG: bool = False
