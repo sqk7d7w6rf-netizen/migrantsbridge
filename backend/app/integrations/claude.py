@@ -17,8 +17,19 @@ class ClaudeClient:
     """Wrapper around the Anthropic AsyncAnthropic client for Claude API calls."""
 
     def __init__(self) -> None:
-        self._client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        self._api_key = settings.ANTHROPIC_API_KEY
         self._model = settings.CLAUDE_MODEL
+        self._client: AsyncAnthropic | None = None
+
+    def _get_client(self) -> AsyncAnthropic:
+        if not self._api_key:
+            raise ValueError(
+                "ANTHROPIC_API_KEY is not configured. "
+                "Set it in your .env file to enable AI features."
+            )
+        if self._client is None:
+            self._client = AsyncAnthropic(api_key=self._api_key)
+        return self._client
 
     async def generate(
         self,
@@ -28,7 +39,7 @@ class ClaudeClient:
         temperature: float = 0.3,
     ) -> str:
         """Send a message to Claude and return the text response."""
-        response = await self._client.messages.create(
+        response = await self._get_client().messages.create(
             model=self._model,
             max_tokens=max_tokens,
             system=system_prompt,
