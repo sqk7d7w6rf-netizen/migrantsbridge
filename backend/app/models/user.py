@@ -65,6 +65,7 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     first_name: Mapped[str] = mapped_column(String(150), nullable=False)
     last_name: Mapped[str] = mapped_column(String(150), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    slack_user_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     role_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("roles.id", ondelete="SET NULL"), nullable=True, index=True
     )
