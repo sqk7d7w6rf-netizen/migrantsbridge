@@ -116,6 +116,7 @@ class ChannelType(str, enum.Enum):
     IN_APP = "in_app"
     PUSH = "push"
     WHATSAPP = "whatsapp"
+    SLACK = "slack"
 
 
 class NotificationStatus(str, enum.Enum):

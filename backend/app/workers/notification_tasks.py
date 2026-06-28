@@ -1,4 +1,4 @@
-"""Celery tasks for sending notifications via email and SMS."""
+"""Celery tasks for sending notifications via email, SMS, and Slack."""
 
 from __future__ import annotations
 
@@ -146,4 +146,76 @@ def send_sms(self, notification_id: str) -> dict:
         return _run_async(_send())
     except Exception as exc:
         logger.exception("SMS send task failed for notification %s", notification_id)
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
+def send_slack(self, notification_id: str) -> dict:
+    """Send a Slack notification."""
+    logger.info("Sending Slack notification %s", notification_id)
+
+    async def _send():
+        from uuid import UUID
+
+        from sqlalchemy import select
+
+        from app.config import settings
+        from app.constants import NotificationStatus
+        from app.core.database import async_session_factory
+        from app.integrations.slack import slack_adapter
+        from app.models.communication import Notification
+        from app.models.user import User
+
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Notification).where(Notification.id == UUID(notification_id))
+            )
+            notif = result.scalar_one_or_none()
+            if notif is None:
+                logger.error("Notification %s not found", notification_id)
+                return {"status": "error", "message": "Notification not found"}
+
+            # Get recipient and derive Slack channel
+            user_result = await session.execute(
+                select(User).where(User.id == notif.user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if user is None:
+                notif.status = NotificationStatus.FAILED
+                session.add(notif)
+                await session.commit()
+                return {"status": "error", "message": "Recipient not found"}
+
+            channel = getattr(user, "slack_user_id", None) or settings.SLACK_DEFAULT_CHANNEL
+            if not channel:
+                notif.status = NotificationStatus.FAILED
+                session.add(notif)
+                await session.commit()
+                return {"status": "error", "message": "No Slack channel available"}
+
+            text = notif.message
+            if notif.title:
+                text = f"*{notif.title}*\n{notif.message}"
+            success = slack_adapter.send(text=text, channel=channel)
+
+            if success:
+                notif.status = NotificationStatus.SENT
+            else:
+                notif.status = NotificationStatus.FAILED
+
+            session.add(notif)
+            await session.commit()
+
+            logger.info(
+                "Slack notification %s to %s: %s",
+                notification_id,
+                channel,
+                "sent" if success else "failed",
+            )
+            return {"status": "sent" if success else "failed", "channel": channel}
+
+    try:
+        return _run_async(_send())
+    except Exception as exc:
+        logger.exception("Slack send task failed for notification %s", notification_id)
         raise self.retry(exc=exc)

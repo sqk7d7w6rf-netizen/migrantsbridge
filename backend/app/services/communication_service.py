@@ -290,6 +290,9 @@ def _dispatch_notification(notification_id: str, channel: str) -> None:
         elif channel == NotificationChannel.SMS.value:
             from app.workers.notification_tasks import send_sms
             send_sms.delay(notification_id)
+        elif channel == ChannelType.SLACK.value:
+            from app.workers.notification_tasks import send_slack
+            send_slack.delay(notification_id)
         # IN_APP notifications are already persisted
     except Exception:
         import logging

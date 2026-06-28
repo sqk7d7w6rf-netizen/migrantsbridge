@@ -54,6 +54,7 @@ class UserRead(BaseModel):
     first_name: str
     last_name: str
     phone: str | None = None
+    slack_user_id: str | None = None
     role_id: UUID | None = None
     role_name: str | None = None
     is_active: bool
@@ -74,6 +75,7 @@ class UserUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
+    slack_user_id: str | None = Field(default=None, max_length=50)
     role_id: UUID | None = None
     is_active: bool | None = None
 
