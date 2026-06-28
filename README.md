@@ -100,7 +100,8 @@ migrantsbridge/
 | **Community Hub**    | Events, resource directory, peer networking                                 |
 | **Wealth Creation**  | Financial literacy modules, micro-loan tracking, savings programs           |
 | **AI Workflows**     | Claude-powered workflow generation, automated task routing and execution    |
-| **Notifications**    | Email, in-app, and SMS notifications via Celery tasks                       |
+| **Notifications**    | Email, in-app, SMS, and Slack notifications via Celery tasks                |
+| **Integrations**     | Slack (alerts, daily KPI pulse) and Notion (case/KPI knowledge base)        |
 | **Admin / RBAC**     | Role-based access control, user management, audit logs                      |
 
 ## Development

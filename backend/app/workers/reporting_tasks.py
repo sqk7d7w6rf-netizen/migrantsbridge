@@ -120,3 +120,46 @@ def compute_daily_kpis() -> dict:
         }
 
     return _run_async(_compute())
+
+
+@celery_app.task
+def post_daily_pulse_to_slack() -> dict:
+    """Periodic task to post a daily KPI digest to Slack.
+
+    Reads the daily KPIs cached by ``compute_daily_kpis`` from Redis and posts
+    a short formatted summary to Slack. Should be scheduled via Celery Beat to
+    run shortly after ``compute_daily_kpis``.
+    """
+    logger.info("Posting daily KPI pulse to Slack")
+
+    async def _post():
+        from app.core.redis import redis_client
+        from app.integrations.slack import slack_adapter
+
+        today = datetime.now(timezone.utc).date()
+        cache_key = f"kpis:daily:{today.isoformat()}"
+
+        cached = await redis_client.get(cache_key)
+        if cached is None:
+            logger.warning("No cached daily KPIs at %s; skipping Slack pulse", cache_key)
+            return {"status": "skipped", "reason": "no cached KPIs"}
+
+        try:
+            kpis = json.loads(cached)
+        except (TypeError, ValueError):
+            logger.warning("Cached daily KPIs at %s could not be parsed", cache_key)
+            return {"status": "skipped", "reason": "invalid cached KPIs"}
+
+        lines = [f"*MigrantsBridge Daily Pulse — {today.isoformat()}*"]
+        if isinstance(kpis, dict):
+            for key, value in kpis.items():
+                if isinstance(value, (str, int, float, bool)):
+                    label = key.replace("_", " ").title()
+                    lines.append(f"• {label}: {value}")
+        text = "\n".join(lines)
+
+        success = slack_adapter.send(text=text)
+        logger.info("Daily Slack pulse posted: %s", "ok" if success else "failed")
+        return {"status": "success" if success else "failed", "date": today.isoformat()}
+
+    return _run_async(_post())
