@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
 from app.core.security import get_current_user
-from app.services import reporting_service
+from app.services import ai_service, reporting_service
 
 router = APIRouter()
 
@@ -33,6 +33,26 @@ async def get_kpis(
 ):
     """Get key performance indicators."""
     return await reporting_service.compute_kpis(session, period_start, period_end)
+
+
+@router.get("/my-plate")
+async def get_my_plate(
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get an org-wide snapshot of what's on the plate this week."""
+    return await reporting_service.get_plate_summary(session)
+
+
+@router.get("/blindspots")
+async def get_blindspots(
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """Get AI-generated blindspot insights from recent KPIs and the plate summary."""
+    kpis = await reporting_service.compute_kpis(session)
+    plate_summary = await reporting_service.get_plate_summary(session)
+    return await ai_service.generate_blindspots(kpis, plate_summary)
 
 
 @router.get("/dashboards/overview")

@@ -15,6 +15,7 @@ from app.constants import (
     AppointmentStatus,
     CaseStatus,
     InvoiceStatus,
+    Priority,
     TaskStatus,
 )
 from app.models.billing import Invoice
@@ -169,6 +170,163 @@ async def compute_kpis(
             "no_show_rate": round(no_shows / (appointments_held + no_shows) * 100, 1) if (appointments_held + no_shows) > 0 else 0,
         },
     }
+
+
+def format_kpi_digest(kpis: dict, period_label: str) -> str:
+    """Format the output of compute_kpis into a Slack mrkdwn digest message.
+
+    Pure string-formatting function (no I/O) so it can be unit tested.
+    """
+    clients = kpis.get("clients", {})
+    cases = kpis.get("cases", {})
+    financial = kpis.get("financial", {})
+    tasks = kpis.get("tasks", {})
+    appointments = kpis.get("appointments", {})
+
+    new_clients = clients.get("new_in_period", 0)
+    total_open_cases = cases.get("total_open", 0)
+    cases_opened = cases.get("opened_in_period", 0)
+    cases_closed = cases.get("closed_in_period", 0)
+    revenue = financial.get("revenue_in_period", "0.00")
+    overdue_tasks = tasks.get("overdue", 0)
+    no_show_rate = appointments.get("no_show_rate", 0)
+
+    lines = [
+        f"*MigrantsBridge KPI Digest — {period_label}*",
+        "",
+        f"• *New clients:* {new_clients}",
+        f"• *Open cases:* {total_open_cases} _(opened {cases_opened} / closed {cases_closed} this period)_",
+        f"• *Revenue this period:* ${revenue}",
+        f"• *Overdue tasks:* {overdue_tasks}",
+        f"• *Appointment no-show rate:* {no_show_rate}%",
+    ]
+    return "\n".join(lines)
+
+
+async def get_plate_summary(session: AsyncSession) -> dict[str, Any]:
+    """Org-wide (not per-user) snapshot of what needs attention this week.
+
+    Includes overdue staff tasks, unassigned open cases, upcoming
+    appointments in the next 7 days, and other "pending decision" signals.
+    """
+    now = datetime.now(timezone.utc)
+    today = date.today()
+    week_from_now = now + timedelta(days=7)
+
+    closed_statuses = [
+        CaseStatus.CLOSED_SUCCESSFUL,
+        CaseStatus.CLOSED_UNSUCCESSFUL,
+        CaseStatus.CLOSED_WITHDRAWN,
+    ]
+
+    # Overdue staff tasks (due_date in the past, not completed)
+    overdue_tasks_query = (
+        select(StaffTask)
+        .where(
+            StaffTask.is_deleted == False,
+            StaffTask.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
+            StaffTask.due_date.isnot(None),
+            StaffTask.due_date < today,
+        )
+        .order_by(StaffTask.due_date.asc())
+    )
+    overdue_tasks_result = await session.execute(overdue_tasks_query)
+    overdue_tasks = overdue_tasks_result.scalars().all()
+
+    overdue_task_examples = [
+        {
+            "title": task.title,
+            "assigned_to_id": str(task.assigned_to_id) if task.assigned_to_id else None,
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+        }
+        for task in overdue_tasks[:5]
+    ]
+
+    # Open cases with no assigned staff
+    unassigned_cases_query = (
+        select(Case)
+        .where(
+            Case.is_deleted == False,
+            Case.assigned_to_id.is_(None),
+            Case.status.notin_(closed_statuses),
+        )
+        .order_by(Case.opened_date.asc())
+    )
+    unassigned_cases_result = await session.execute(unassigned_cases_query)
+    unassigned_cases = unassigned_cases_result.scalars().all()
+
+    unassigned_case_examples = [
+        {
+            "case_number": case.case_number,
+            "case_type": case.case_type.value if hasattr(case.case_type, "value") else str(case.case_type),
+            "opened_date": case.opened_date.isoformat() if case.opened_date else None,
+        }
+        for case in unassigned_cases[:5]
+    ]
+
+    # Upcoming appointments in the next 7 days
+    upcoming_appointments_count = (await session.execute(
+        select(func.count(Appointment.id)).where(
+            Appointment.is_deleted == False,
+            Appointment.status.in_([AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]),
+            Appointment.start_time >= now,
+            Appointment.start_time <= week_from_now,
+        )
+    )).scalar_one()
+
+    # High-priority tasks with no due date set (at risk of being forgotten)
+    high_priority_no_due_date = (await session.execute(
+        select(func.count(StaffTask.id)).where(
+            StaffTask.is_deleted == False,
+            StaffTask.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
+            StaffTask.priority.in_([Priority.HIGH, Priority.URGENT]),
+            StaffTask.due_date.is_(None),
+        )
+    )).scalar_one()
+
+    return {
+        "overdue_tasks": {
+            "count": len(overdue_tasks),
+            "examples": overdue_task_examples,
+        },
+        "unassigned_open_cases": {
+            "count": len(unassigned_cases),
+            "examples": unassigned_case_examples,
+        },
+        "upcoming_appointments_next_7_days": upcoming_appointments_count,
+        "high_priority_tasks_missing_due_date": high_priority_no_due_date,
+    }
+
+
+def format_plate_digest(summary: dict) -> str:
+    """Format get_plate_summary's output into a Slack mrkdwn digest message.
+
+    Pure string-formatting function (no I/O) so it can be unit tested.
+    """
+    overdue = summary.get("overdue_tasks", {})
+    unassigned = summary.get("unassigned_open_cases", {})
+    upcoming_appointments = summary.get("upcoming_appointments_next_7_days", 0)
+    high_priority_no_due_date = summary.get("high_priority_tasks_missing_due_date", 0)
+
+    lines = [
+        "*What's on your plate this week*",
+        "",
+        f"• *Overdue tasks:* {overdue.get('count', 0)}",
+    ]
+    for example in overdue.get("examples", []):
+        assignee = example.get("assigned_to_id") or "unassigned"
+        lines.append(f"    - {example.get('title')} (assignee: {assignee}, due {example.get('due_date')})")
+
+    lines.append(f"• *Unassigned open cases:* {unassigned.get('count', 0)}")
+    for example in unassigned.get("examples", []):
+        lines.append(
+            f"    - Case #{example.get('case_number')} ({example.get('case_type')}, opened {example.get('opened_date')})"
+        )
+
+    lines.append(f"• *Upcoming appointments (next 7 days):* {upcoming_appointments}")
+    lines.append(f"• *High-priority tasks with no due date:* {high_priority_no_due_date}")
+
+    return "\n".join(lines)
 
 
 async def get_overview_dashboard(session: AsyncSession) -> dict[str, Any]:

@@ -120,3 +120,77 @@ def compute_daily_kpis() -> dict:
         }
 
     return _run_async(_compute())
+
+
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=120)
+def send_friday_kpi_digest(self) -> dict:
+    """Periodic task to post the weekly 5-KPI digest to Slack.
+
+    Computes KPIs for the current week (Monday through today) and posts a
+    formatted summary to the CEO desk Slack channel.
+
+    Should be scheduled via Celery Beat to run Friday afternoons.
+    """
+    logger.info("Generating Friday KPI Slack digest")
+
+    async def _send():
+        from app.config import settings
+        from app.core.database import async_session_factory
+        from app.integrations.slack import slack_client
+        from app.services import reporting_service
+
+        now = datetime.now(timezone.utc)
+        today = now.date()
+        week_start = today - timedelta(days=today.weekday())
+
+        async with async_session_factory() as session:
+            kpis = await reporting_service.compute_kpis(session, week_start, today)
+
+        period_label = f"{week_start.isoformat()} to {today.isoformat()}"
+        text = reporting_service.format_kpi_digest(kpis, period_label)
+
+        await slack_client.post_message(settings.SLACK_CEO_DESK_CHANNEL, text)
+
+        logger.info("Friday KPI digest posted to Slack for period %s", period_label)
+        return {"status": "success", "period": period_label, "kpis": kpis}
+
+    try:
+        return _run_async(_send())
+    except Exception as exc:
+        logger.exception("Friday KPI digest failed")
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=120)
+def send_monday_plate_digest(self) -> dict:
+    """Periodic task to post the "what's on your plate this week" digest to Slack.
+
+    Computes an org-wide snapshot of overdue tasks, unassigned open cases,
+    and upcoming appointments, and posts a formatted summary to the CEO
+    desk Slack channel.
+
+    Should be scheduled via Celery Beat to run Monday mornings.
+    """
+    logger.info("Generating Monday plate Slack digest")
+
+    async def _send():
+        from app.config import settings
+        from app.core.database import async_session_factory
+        from app.integrations.slack import slack_client
+        from app.services import reporting_service
+
+        async with async_session_factory() as session:
+            summary = await reporting_service.get_plate_summary(session)
+
+        text = reporting_service.format_plate_digest(summary)
+
+        await slack_client.post_message(settings.SLACK_CEO_DESK_CHANNEL, text)
+
+        logger.info("Monday plate digest posted to Slack")
+        return {"status": "success", "summary": summary}
+
+    try:
+        return _run_async(_send())
+    except Exception as exc:
+        logger.exception("Monday plate digest failed")
+        raise self.retry(exc=exc)
