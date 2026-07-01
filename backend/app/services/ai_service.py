@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from app.integrations.claude import claude_client
+from app.prompts.blindspots import BLINDSPOTS_SYSTEM, BLINDSPOTS_USER
 from app.prompts.document_classification import (
     DOCUMENT_CLASSIFICATION_SYSTEM,
     DOCUMENT_CLASSIFICATION_USER,
@@ -183,4 +184,32 @@ async def suggest_routing(
         result["recommended_staff_id"],
         result["confidence"],
     )
+    return result
+
+
+async def generate_blindspots(kpis: dict[str, Any], plate_summary: dict[str, Any]) -> dict[str, Any]:
+    """Use Claude to identify organizational blindspots from KPIs and the plate summary.
+
+    Args:
+        kpis: Output of reporting_service.compute_kpis.
+        plate_summary: Output of reporting_service.get_plate_summary.
+
+    Returns:
+        A dict with a "blindspots" list of {title, detail, severity}.
+    """
+    user_message = BLINDSPOTS_USER.format(
+        kpis=json.dumps(kpis, indent=2, default=str),
+        plate_summary=json.dumps(plate_summary, indent=2, default=str),
+    )
+
+    result = await claude_client.generate_json(
+        system_prompt=BLINDSPOTS_SYSTEM,
+        user_message=user_message,
+        max_tokens=2048,
+        temperature=0.3,
+    )
+
+    result.setdefault("blindspots", [])
+
+    logger.info("Generated %d blindspots", len(result["blindspots"]))
     return result

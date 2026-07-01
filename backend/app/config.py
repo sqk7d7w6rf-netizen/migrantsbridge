@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str = ""
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    SLACK_BOT_TOKEN: str = ""
+    SLACK_CEO_DESK_CHANNEL: str = ""
 
 
 settings = Settings()
