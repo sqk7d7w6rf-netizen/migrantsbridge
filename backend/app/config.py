@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str = ""
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    FIRST_ADMIN_EMAIL: str = ""
+    FIRST_ADMIN_PASSWORD: str = ""
 
 
 settings = Settings()
