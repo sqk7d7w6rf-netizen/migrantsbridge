@@ -1,0 +1,18 @@
+[run]
+source = app
+omit =
+    app/scripts/*
+    app/alembic/*
+    */migrations/*
+    */__init__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    \.\.\.
+
+[html]
+directory = htmlcov
